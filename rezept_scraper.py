@@ -79,11 +79,13 @@ def lade_rezept_von_url(url):
   except Exception:
     return None
 
-# --- 3. ECHTER LIVE-WEB-FALLBACK (ULTRA-STRENG GEFILTERT) ---
+# --- 3. ECHTER LIVE-WEB-FALLBACK (INTELLIGENT GEFILTERT) ---
 def suche_und_scrape_im_web(suchbegriff):
   gefundene_rezepte = []
   query = quote_plus(suchbegriff)
-  such_wort_clean = suchbegriff.lower()
+  
+  # Zerlege den Suchbegriff in einzelne Wörter für einen flexiblen Abgleich (z.B. ["wiener", "schnitzel"])
+  such_woerter = [w.lower() for w in suchbegriff.split() if len(w) > 2]
 
   such_urls = [
       f"https://www.essen-und-trinken.de/suche?q={query}",
@@ -119,32 +121,26 @@ def suche_und_scrape_im_web(suchbegriff):
           else:
             voll_url = f"https://www.essen-und-trinken.de{href}"
 
-          # Nur Links aufnehmen, bei denen das Suchwort im Pfad steht
-          if (
-              such_wort_clean in voll_url.lower()
-              and voll_url not in rezept_links
-          ):
-            rezept_links.append(voll_url)
+          # Prüfen, ob die URL mind. die wichtigsten Suchwörter enthält
+          url_lower = voll_url.lower()
+          if all(wort in url_lower for wort in such_woerter):
+            if voll_url not in rezept_links:
+              rezept_links.append(voll_url)
 
-      print(
-          f"🔗 {len(rezept_links)} exakt passende Links auf {portal_name}"
-          " gefunden."
-      )
+      print(f"🔗 {len(rezept_links)} passende Links auf {portal_name} gefunden.")
 
       for link in rezept_links[:2]:
         daten = lade_rezept_von_url(link)
         if daten:
-          # Zusätzlicher Check: Kommt das Suchwort auch im Rezept-Titel vor?
-          if such_wort_clean in daten["titel"].lower():
+          # Check ob der Titel auch zum Thema passt
+          titel_lower = daten["titel"].lower()
+          if any(wort in titel_lower for wort in such_woerter):
             speichere_rezept(daten["titel"], daten["url"], daten["zutaten"])
             gefundene_rezepte.append(
                 (daten["titel"], daten["url"], ", ".join(daten["zutaten"]))
             )
           else:
-            print(
-                f"⏭️ Übersprungen (Titel passt nicht zu '{suchbegriff}'):"
-                f" {daten['titel']}"
-            )
+            print(f"⏭️ Übersprungen (Titel passt nicht): {daten['titel']}")
     except Exception as e:
       print(f"⚠️ Hinweis bei Websuche auf {portal_name}: {e}")
 
